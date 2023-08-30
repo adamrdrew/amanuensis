@@ -1,21 +1,24 @@
-# Start with a Fedora base to set up user and permissions
+# Start from the Fedora base image
 FROM fedora:latest AS setup
 
-# Create user and setup directories
+# Create user, set up directories
 RUN useradd -u 1001 -G 0 -ms /bin/bash coder && \
     mkdir -p /home/coder/.ssh /home/coder/.gnupg && \
     chown -R 1001:0 /home/coder && \
     chmod 700 /home/coder/.ssh /home/coder/.gnupg && \
     chmod -R g=u /home/coder
 
-# Start with the base code-server image
+# Copy to final image
 FROM codercom/code-server:latest
 
-# Copy user and directory setup from the Fedora image
+# Copy user setup
 COPY --from=setup /home/coder /home/coder
+
+# Create entrypoint script
+COPY entrypoint.sh /entrypoint.sh
 
 # Switch to non-root user
 USER 1001
 
-# Start code-server
-CMD ["code-server", "--bind-addr", "0.0.0.0:8080"]
+# Use the entry script
+ENTRYPOINT [ "/entrypoint.sh" ]
