@@ -83,7 +83,7 @@ objects:
         spec:
           containers:
           - name: code-server
-            image: quay.io/rh_ee_addrew/amanuensis:latest
+            image: quay.io/rh_ee_addrew/amanuensis:v1
             env:
             - name: PASSWORD
               valueFrom:

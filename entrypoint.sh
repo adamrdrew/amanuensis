@@ -1,12 +1,17 @@
-#!/bin/sh
-# If we're on OpenShift, non-root will be a random user
-# which will nonetheless be a part of the root group.
-if [ "$(id -u)" = "1001" ]; then
-  # Ensure $HOME exists and is accessible by the group
-  echo "Running on OpenShift as non-root"
-  chown $(id -u):$(id -g) $HOME
-  echo "$(id -u):x:$(id -u):$(id -g):,,,:${HOME}:/bin/bash" >> /etc/passwd
+#!/bin/bash
+
+# Add current user to /etc/passwd
+if ! whoami &> /dev/null; then
+  if [ -w /etc/passwd ]; then
+    echo "${USER_NAME:-coder}:x:$(id -u):0:${USER_NAME:-coder} user:${HOME}:/sbin/nologin" >> /etc/passwd
+  fi
 fi
 
-# Start code-server
-exec code-server --bind-addr 0.0.0.0:8080
+# Ensure the .config directory is writable
+if [ -n "$HOME" ]; then
+  mkdir -p "$HOME/.config"
+  chown -R $(id -u):0 "$HOME/.config"
+fi
+
+# Execute the original command
+exec "$@"
