@@ -1,0 +1,147 @@
+apiVersion: template.openshift.io/v1
+kind: Template
+metadata:
+  name: amanuensis
+objects:
+
+  - apiVersion: v1
+    kind: Secret
+    metadata:
+      name: code-server-password-secret
+      namespace: ${NAMESPACE}
+    type: Opaque
+    stringData:
+      password: ${CODE_SERVER_PASSWORD}
+
+  - apiVersion: v1
+    kind: Secret
+    metadata:
+      name: ssh-key-secret
+      namespace: ${NAMESPACE}
+    type: Opaque
+    data:
+      id_rsa: ${SSH_KEY_BASE64}
+
+  - apiVersion: v1
+    kind: Secret
+    metadata:
+      name: gpg-key-secret
+      namespace: ${NAMESPACE}
+    type: Opaque
+    data:
+      gpg-private-key: ${GPG_KEY_BASE64}
+
+  - apiVersion: rbac.authorization.k8s.io/v1
+    kind: Role
+    metadata:
+      name: restrict-secrets-access
+      namespace: ${NAMESPACE}
+    rules:
+    - apiGroups: [""]
+      resources: ["secrets"]
+      verbs: ["get"]
+
+  - apiVersion: rbac.authorization.k8s.io/v1
+    kind: RoleBinding
+    metadata:
+      name: restrict-terminal-access-binding
+      namespace: ${NAMESPACE}
+    roleRef:
+      apiGroup: rbac.authorization.k8s.io
+      kind: Role
+      name: restrict-terminal-access
+    subjects:
+    - apiGroup: rbac.authorization.k8s.io
+      kind: Group
+      name: system:authenticated  # All authenticated users
+
+  - apiVersion: rbac.authorization.k8s.io/v1
+    kind: Role
+    metadata:
+      name: restrict-terminal-access
+      namespace: ${NAMESPACE}
+    rules:
+    - apiGroups: [""]
+      resources: ["pods"]
+      verbs: ["get", "list", "watch"]  # No "exec", "attach", or "port-forward"
+
+  - apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: code-server-deployment
+      labels:
+        app: code-server
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: code-server
+      template:
+        metadata:
+          labels:
+            app: code-server
+        spec:
+          containers:
+          - name: code-server
+            image: codercom/code-server:latest
+            env:
+            - name: PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: code-server-password-secret
+                  key: password
+            volumeMounts:
+            - name: ssh-key-volume
+              mountPath: /home/coder/.ssh
+            - name: gpg-key-volume
+              mountPath: /home/coder/.gnupg
+          volumes:
+          - name: ssh-key-volume
+            secret:
+              secretName: ssh-key-secret
+              defaultMode: 0400
+          - name: gpg-key-volume
+            secret:
+              secretName: gpg-key-secret
+              defaultMode: 0400
+
+  - apiVersion: v1
+    kind: Service
+    metadata:
+      name: code-server-service
+      labels:
+        app: code-server
+    spec:
+      ports:
+        - port: 80
+          targetPort: 8080 # Assuming that code-server runs on port 8080 in the container
+      selector:
+        app: code-server
+
+  - apiVersion: route.openshift.io/v1
+    kind: Route
+    metadata:
+      name: code-server-route
+    spec:
+      to:
+        kind: Service
+        name: code-server-service
+
+parameters:
+  - description: Namespace to deploy into
+    displayName: Namespace
+    name: NAMESPACE
+    required: true
+    value: amanuensis
+  - description: Base64 encoded SSH private key
+    displayName: SSH Key (Base64)
+    name: SSH_KEY_BASE64
+    required: true
+  - description: Base64 encoded GPG private key
+    displayName: GPG Key (Base64)
+    name: GPG_KEY_BASE64
+    required: true
+  - description: Password for code-server
+    displayName: Code Server Password
+    name: CODE_SERVER_PASSWORD
+    required: true
