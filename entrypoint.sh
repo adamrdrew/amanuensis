@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Explicitly set the HOME directory
+export HOME=/home/coder
+
 # Add current user to /etc/passwd
 if ! whoami &> /dev/null; then
   if [ -w /etc/passwd ]; then
